@@ -402,6 +402,7 @@ async function sendCustomerMessageEmail(senderName, senderEmail, subject, messag
 }
 
 module.exports = {
+  sendEmailViaBrevo,
   sendUserRegistrationEmail,
   sendOrderConfirmationEmail,
   sendOrderStatusUpdateEmail,

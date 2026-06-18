@@ -956,13 +956,7 @@ app.post('/api/send-message', async (req, res) => {
       return res.status(400).json({ error: 'Subject, message, sender name, and sender email are required' });
     }
 
-    // Load or create messages file
-    const messagesFilePath = path.join(__dirname, 'messages.json');
-    let messages = [];
-    if (fs.existsSync(messagesFilePath)) {
-      const data = fs.readFileSync(messagesFilePath, 'utf8');
-      messages = data ? JSON.parse(data) : [];
-    }
+    console.log(`📧 Sending message to ${emails.length} recipients...`);
 
     // Create message record
     const messageRecord = {
@@ -976,78 +970,90 @@ app.post('/api/send-message', async (req, res) => {
       read: false
     };
 
-    messages.push(messageRecord);
-    fs.writeFileSync(messagesFilePath, JSON.stringify(messages, null, 2));
-    console.log('✅ Message saved:', messageRecord.id);
+    let sentCount = 0;
+    let failedCount = 0;
 
-    // Send email notification to admin (amoostore5@gmail.com)
-    try {
-      await sendCustomerMessageEmail(senderName, senderEmail, subject, message, process.env.EMAIL_USER || 'amoostore5@gmail.com');
-    } catch (emailError) {
-      console.error('⚠️ Message saved but email notification failed:', emailError.message);
-    }
-
-    // Send confirmation email to customer
-    const confirmationTemplate = {
-      subject: '✅ We received your message',
+    // Send email to each recipient using Brevo
+    const emailTemplate = {
+      subject: subject,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
           <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            <h2 style="color: #27ae60; margin-bottom: 20px;">✅ We Received Your Message!</h2>
+            <h2 style="color: #2c3e50; margin-bottom: 20px;">${subject}</h2>
             
-            <p style="color: #666; font-size: 16px; line-height: 1.6;">
-              Hi ${senderName},
-            </p>
-            
-            <p style="color: #666; font-size: 16px; line-height: 1.6;">
-              Thank you for contacting Amoo Store. We have received your message and will respond to you as soon as possible.
-            </p>
-            
-            <div style="background-color: #f0f0f0; padding: 15px; border-radius: 5px; margin: 20px 0;">
-              <p style="margin: 5px 0; color: #333;"><strong>Subject:</strong> ${subject}</p>
-              <p style="margin: 5px 0; color: #333;"><strong>Sent on:</strong> ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
-            </p>
+            <div style="background-color: #f0f0f0; padding: 20px; border-radius: 5px; margin: 20px 0; white-space: pre-wrap; line-height: 1.6;">
+              ${message}
             </div>
             
-            <p style="color: #666; font-size: 14px; line-height: 1.6;">
-              We appreciate your inquiry and will get back to you shortly. Our support team typically responds within 24 hours.
+            <p style="color: #666; font-size: 14px; margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px;">
+              <strong>From:</strong> ${senderName} (${senderEmail})<br/>
+              <strong>Sent on:</strong> ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}
             </p>
             
-            <p style="color: #999; font-size: 12px; margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
-              If you have any additional questions, feel free to contact us again.
+            <p style="color: #999; font-size: 12px; margin-top: 30px;">
+              This is a message from Amoo Store. If you have any questions, please reply to this email.
             </p>
           </div>
         </div>
       `,
-      text: `Thank you for contacting Amoo Store!\n\nWe have received your message and will respond as soon as possible.\n\nSubject: ${subject}\nSent on: ${new Date().toLocaleDateString()}\n\nOur support team typically responds within 24 hours.\n\nBest regards,\nAmoo Store Team`
+      text: `${subject}\n\n${message}\n\nFrom: ${senderName} (${senderEmail})\nSent on: ${new Date().toLocaleDateString()}\n\nThis is a message from Amoo Store.`
     };
 
-    try {
-      const nodemailer = require('nodemailer');
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: process.env.EMAIL_USER || 'amoostore5@gmail.com',
-          pass: process.env.EMAIL_PASSWORD || 'gslm kpik cilc btle'
-        }
-      });
-
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER || 'amoostore5@gmail.com',
-        to: senderEmail,
-        subject: confirmationTemplate.subject,
-        html: confirmationTemplate.html,
-        text: confirmationTemplate.text
-      });
-      console.log('✅ Confirmation email sent to:', senderEmail);
-    } catch (emailError) {
-      console.error('⚠️ Failed to send confirmation email:', emailError.message);
+    // Send to each recipient
+    for (const recipientEmail of emails) {
+      try {
+        const { sendEmailViaBrevo } = require('./emailService.js');
+        await sendEmailViaBrevo(recipientEmail, emailTemplate.subject, emailTemplate.html, emailTemplate.text, senderEmail);
+        sentCount++;
+        console.log(`✅ Email sent to: ${recipientEmail}`);
+      } catch (error) {
+        failedCount++;
+        console.error(`❌ Failed to send email to ${recipientEmail}:`, error.message);
+      }
     }
 
+    // Save to Supabase messages table
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert([{
+          sender_email: senderEmail,
+          sender_name: senderName,
+          recipient_emails: emails,
+          subject: subject,
+          message_content: message,
+          status: sentCount > 0 ? 'sent' : 'failed',
+          recipient_count: emails.length,
+          sent_count: sentCount,
+          failed_count: failedCount
+        }]);
+
+      if (error) {
+        console.warn('⚠️ Supabase save failed:', error.message);
+      } else {
+        console.log(`✅ Message saved to Supabase (${sentCount} sent, ${failedCount} failed)`);
+      }
+    } catch (supabaseError) {
+      console.warn('⚠️ Supabase error:', supabaseError.message);
+    }
+
+    // Also save to local JSON for fallback
+    const messagesFilePath = path.join(__dirname, 'messages.json');
+    let messages = [];
+    if (fs.existsSync(messagesFilePath)) {
+      const data = fs.readFileSync(messagesFilePath, 'utf8');
+      messages = data ? JSON.parse(data) : [];
+    }
+    messageRecord.sentCount = sentCount;
+    messageRecord.failedCount = failedCount;
+    messages.push(messageRecord);
     res.json({ 
       success: true, 
-      message: 'Message sent successfully',
-      messageId: messageRecord.id
+      message: `Message sent to ${sentCount} recipient(s)${failedCount > 0 ? `, ${failedCount} failed` : ''}`,
+      messageId: messageRecord.id,
+      sentCount,
+      failedCount,
+      totalRecipients: emails.length
     });
 
   } catch (error) {

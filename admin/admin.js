@@ -802,9 +802,12 @@ document.getElementById('send-message-form').addEventListener('submit', async (e
     });
 
     if (response.ok) {
-      showMessageSuccess(
-        `✅ Message sent successfully to ${window.customerEmails.length} customer(s)!`
-      );
+      const result = await response.json();
+      let successMsg = `✅ ${result.message}`;
+      if (result.sentCount !== undefined && result.failedCount !== undefined) {
+        successMsg = `✅ Message sent: ${result.sentCount} succeeded${result.failedCount > 0 ? `, ${result.failedCount} failed` : ''}`;
+      }
+      showMessageSuccess(successMsg);
       document.getElementById('send-message-form').reset();
     } else {
       const error = await response.json();
