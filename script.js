@@ -162,7 +162,7 @@ accountForms.forEach((form) => {
     if (form.dataset.accountForm === 'register') {
       const name = String(formData.get('name') || '').trim();
       const email = String(formData.get('email') || '').trim();
-      const phone = String(formData.get('phone') || '').trim();
+      let phone = String(formData.get('phone') || '').trim();
       const address = String(formData.get('address') || '').trim();
       const country = String(formData.get('country') || '').trim();
       const zip = String(formData.get('zip') || '').trim();
@@ -173,6 +173,12 @@ accountForms.forEach((form) => {
           accountStatus.textContent = 'Please fill in all registration fields.';
         }
         return;
+      }
+
+      // Automatically add country code to phone number
+      if (country && countryZipFormats[country] && !phone.startsWith('+')) {
+        const countryCode = countryZipFormats[country].code;
+        phone = countryCode + phone;
       }
 
       // Save profile and treat registration as an immediate login
@@ -924,7 +930,7 @@ if (document.body.dataset.page === 'checkout') {
     checkoutForm.addEventListener('submit', (event) => {
       event.preventDefault();
       const formData = new FormData(checkoutForm);
-      const phone = String(formData.get('phone') || '').trim();
+      let phone = String(formData.get('phone') || '').trim();
       const address = String(formData.get('address') || '').trim();
       const country = String(formData.get('country') || '').trim();
       const paymentMethod = String(formData.get('payment-method') || '').trim();
@@ -934,6 +940,12 @@ if (document.body.dataset.page === 'checkout') {
           checkoutMessage.textContent = 'Please complete all checkout fields before confirming your order.';
         }
         return;
+      }
+
+      // Automatically add country code to phone number
+      if (country && countryZipFormats[country] && !phone.startsWith('+')) {
+        const countryCode = countryZipFormats[country].code;
+        phone = countryCode + phone;
       }
 
       // Generate order summary for WhatsApp
@@ -989,7 +1001,7 @@ Please confirm my order. I will proceed with bank transfer payment.`;
             customerId: accountProfile?.email || 'unknown',
             customerName: accountProfile?.name || 'Customer',
             customerEmail: accountProfile?.email || 'unknown@example.com',
-            phone: String(formData.get('phone') || '').trim(),
+            phone: phone,
             address: String(formData.get('address') || '').trim(),
             items: cartState.map(item => {
               const product = getProduct(item.id);
@@ -1083,24 +1095,24 @@ revealElements.forEach((element) => observer.observe(element));
 
 // Country to ZIP format mapping
 const countryZipFormats = {
-  'Nigeria': { format: '100001', example: 'Nigerian: 100001', phone: '+2349012345678' },
-  'United States': { format: '12345', example: 'US: 12345', phone: '+12015550123' },
-  'Canada': { format: 'K1A 0B1', example: 'Canada: K1A 0B1', phone: '+14165551234' },
-  'United Kingdom': { format: 'SW1A 1AA', example: 'UK: SW1A 1AA', phone: '+447911123456' },
-  'Germany': { format: '10115', example: 'Germany: 10115', phone: '+491234567890' },
-  'France': { format: '75001', example: 'France: 75001', phone: '+33123456789' },
-  'Italy': { format: '00100', example: 'Italy: 00100', phone: '+393912345678' },
-  'Spain': { format: '28001', example: 'Spain: 28001', phone: '+34912345678' },
-  'Australia': { format: '2000', example: 'Australia: 2000', phone: '+61212345678' },
-  'India': { format: '110001', example: 'India: 110001', phone: '+919876543210' },
-  'Ghana': { format: 'GA 100 100', example: 'Ghana: GA 100 100', phone: '+233201234567' },
-  'Kenya': { format: '00100', example: 'Kenya: 00100', phone: '+254701234567' },
-  'South Africa': { format: '0001', example: 'South Africa: 0001', phone: '+27123456789' },
-  'Egypt': { format: '11511', example: 'Egypt: 11511', phone: '+201001234567' },
-  'Japan': { format: '100-0001', example: 'Japan: 100-0001', phone: '+81312345678' },
-  'China': { format: '100000', example: 'China: 100000', phone: '+8610123456789' },
-  'Brazil': { format: '01310-100', example: 'Brazil: 01310-100', phone: '+551123456789' },
-  'Mexico': { format: '06500', example: 'Mexico: 06500', phone: '+525512345678' }
+  'Nigeria': { format: '100001', example: 'Nigerian: 100001', phone: '+2349012345678', code: '+234' },
+  'United States': { format: '12345', example: 'US: 12345', phone: '+12015550123', code: '+1' },
+  'Canada': { format: 'K1A 0B1', example: 'Canada: K1A 0B1', phone: '+14165551234', code: '+1' },
+  'United Kingdom': { format: 'SW1A 1AA', example: 'UK: SW1A 1AA', phone: '+447911123456', code: '+44' },
+  'Germany': { format: '10115', example: 'Germany: 10115', phone: '+491234567890', code: '+49' },
+  'France': { format: '75001', example: 'France: 75001', phone: '+33123456789', code: '+33' },
+  'Italy': { format: '00100', example: 'Italy: 00100', phone: '+393912345678', code: '+39' },
+  'Spain': { format: '28001', example: 'Spain: 28001', phone: '+34912345678', code: '+34' },
+  'Australia': { format: '2000', example: 'Australia: 2000', phone: '+61212345678', code: '+61' },
+  'India': { format: '110001', example: 'India: 110001', phone: '+919876543210', code: '+91' },
+  'Ghana': { format: 'GA 100 100', example: 'Ghana: GA 100 100', phone: '+233201234567', code: '+233' },
+  'Kenya': { format: '00100', example: 'Kenya: 00100', phone: '+254701234567', code: '+254' },
+  'South Africa': { format: '0001', example: 'South Africa: 0001', phone: '+27123456789', code: '+27' },
+  'Egypt': { format: '11511', example: 'Egypt: 11511', phone: '+201001234567', code: '+20' },
+  'Japan': { format: '100-0001', example: 'Japan: 100-0001', phone: '+81312345678', code: '+81' },
+  'China': { format: '100000', example: 'China: 100000', phone: '+8610123456789', code: '+86' },
+  'Brazil': { format: '01310-100', example: 'Brazil: 01310-100', phone: '+551123456789', code: '+55' },
+  'Mexico': { format: '06500', example: 'Mexico: 06500', phone: '+525512345678', code: '+52' }
 };
 
 // Handle country selection change
