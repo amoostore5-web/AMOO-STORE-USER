@@ -7,6 +7,7 @@ const bodyParser = require('body-parser');
 const { createClient } = require('@supabase/supabase-js');
 const { sendUserRegistrationEmail, sendOrderConfirmationEmail, sendOrderStatusUpdateEmail, sendAdminRegistrationEmail, sendCustomerMessageEmail } = require('./emailService');
 const { sendRegistrationSMS, sendOrderConfirmationSMS, sendOrderStatusSMS } = require('./smsService');
+const { sendRegistrationWhatsApp, sendOrderConfirmationWhatsApp, sendOrderStatusWhatsApp, sendBulkWhatsApp } = require('./whatsappService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -549,6 +550,12 @@ app.post('/api/register', async (req, res) => {
     sendRegistrationSMS(newUser.phone, newUser.name)
       .catch(error => console.error('SMS sending error (non-critical):', error.message));
     
+    // Send registration WhatsApp
+    if (newUser.phone) {
+      sendRegistrationWhatsApp(newUser.phone, newUser.name)
+        .catch(error => console.error('WhatsApp sending error (non-critical):', error.message));
+    }
+    
     res.status(201).json({ success: true, message: 'User registered successfully', userId: newUser.id });
   } else {
     res.status(500).json({ error: 'Failed to save user data' });
@@ -764,6 +771,12 @@ app.post('/api/orders', async (req, res) => {
         .catch(error => console.error('SMS sending error (non-critical):', error.message));
     }
     
+    // Send order confirmation WhatsApp
+    if (phone) {
+      sendOrderConfirmationWhatsApp(phone, customerName, newOrder.id, total, newOrder.address)
+        .catch(error => console.error('WhatsApp sending error (non-critical):', error.message));
+    }
+    
     res.status(201).json({ success: true, order: newOrder });
   } else {
     res.status(500).json({ error: 'Failed to save order' });
@@ -806,6 +819,16 @@ app.put('/api/orders/:orderId', async (req, res) => {
         orders[orderIndex].id,
         status
       ).catch(error => console.error('SMS sending error (non-critical):', error.message));
+    }
+    
+    // Send order status WhatsApp
+    if (orders[orderIndex].phone) {
+      sendOrderStatusWhatsApp(
+        orders[orderIndex].phone,
+        orders[orderIndex].customerName,
+        orders[orderIndex].id,
+        status
+      ).catch(error => console.error('WhatsApp sending error (non-critical):', error.message));
     }
     
     res.json({ success: true, order: orders[orderIndex] });
@@ -1060,6 +1083,19 @@ app.post('/api/send-message', async (req, res) => {
         } catch (error) {
           failedCount++;
           console.error(`❌ Failed to send SMS to ${phoneNumber}:`, error.message);
+        }
+      }
+    }
+
+    // Send WhatsApp to each phone recipient
+    if (phones && phones.length > 0) {
+      for (const phoneNumber of phones) {
+        try {
+          const whatsappMessage = `📢 *Message from AMOO STORE*\n\n${subject}\n\n${message}\n\nThank you!`;
+          await sendBulkWhatsApp([phoneNumber], whatsappMessage);
+          console.log(`✅ WhatsApp sent to: ${phoneNumber}`);
+        } catch (error) {
+          console.error(`❌ Failed to send WhatsApp to ${phoneNumber}:`, error.message);
         }
       }
     }
